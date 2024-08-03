@@ -1,76 +1,164 @@
-# Contributor Covenant Code of Conduct
+pip install flask
+project/
+├── app.py
+└── templates/
+    └── index.html
+    from flask import Flask, render_template, request, jsonify
+import random
+import string
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
-## Our Pledge
+app = Flask(__name__)
 
-In the interest of fostering an open and welcoming environment, we as
-contributors and maintainers pledge to making participation in our project and
-our community a harassment-free experience for everyone, regardless of age, body
-size, disability, ethnicity, sex characteristics, gender identity and expression,
-level of experience, education, socio-economic status, nationality, personal
-appearance, race, religion, or sexual identity and orientation.
+# إعدادات البريد الإلكتروني
+EMAIL_ADDRESS = 'your_email@example.com'
+EMAIL_PASSWORD = 'your_password'
+SMTP_SERVER = 'smtp.example.com'
+SMTP_PORT = 587
 
-## Our Standards
+def generate_random_code():
+    letters = string.ascii_uppercase
+    return ''.join(random.choice(letters) for _ in range(6))
 
-Examples of behavior that contributes to creating a positive environment
-include:
+def send_email(recipient, code):
+    msg = MIMEMultipart()
+    msg['From'] = EMAIL_ADDRESS
+    msg['To'] = recipient
+    msg['Subject'] = 'رمز التحقق الخاص بك'
+    
+    body = f'رمز التحقق الخاص بك هو: {code}'
+    msg.attach(MIMEText(body, 'plain'))
+    
+    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+        server.starttls()
+        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        text = msg.as_string()
+        server.sendmail(EMAIL_ADDRESS, recipient, text)
 
-* Using welcoming and inclusive language
-* Being respectful of differing viewpoints and experiences
-* Gracefully accepting constructive criticism
-* Focusing on what is best for the community
-* Showing empathy towards other community members
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-Examples of unacceptable behavior by participants include:
+@app.route('/send_code', methods=['POST'])
+def send_code():
+    email = request.form['email']
+    if not email:
+        return jsonify({'error': 'يرجى إدخال البريد الإلكتروني'}), 400
 
-* The use of sexualized language or imagery and unwelcome sexual attention or
- advances
-* Trolling, insulting/derogatory comments, and personal or political attacks
-* Public or private harassment
-* Publishing others' private information, such as a physical or electronic
- address, without explicit permission
-* Other conduct which could reasonably be considered inappropriate in a
- professional setting
+    code = generate_random_code()
+    try:
+        send_email(email, code)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-## Our Responsibilities
+    return jsonify({'code': code})
 
-Project maintainers are responsible for clarifying the standards of acceptable
-behavior and are expected to take appropriate and fair corrective action in
-response to any instances of unacceptable behavior.
+if __name__ == '__main__':
+    app.run(debug=True)
 
-Project maintainers have the right and responsibility to remove, edit, or
-reject comments, commits, code, wiki edits, issues, and other contributions
-that are not aligned to this Code of Conduct, or to ban temporarily or
-permanently any contributor for other behaviors that they deem inappropriate,
-threatening, offensive, or harmful.
 
-## Scope
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تأكيد البريد الإلكتروني</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        .hidden {
+            display: none;
+        }
+        .message {
+            padding: 20px;
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .blue-window {
+            background-color: blue;
+            color: white;
+        }
+        .red-window {
+            background-color: red;
+            color: white;
+        }
+    </style>
+</head>
+<body>
 
-This Code of Conduct applies both within project spaces and in public spaces
-when an individual is representing the project or its community. Examples of
-representing a project or community include using an official project e-mail
-address, posting via an official social media account, or acting as an appointed
-representative at an online or offline event. Representation of a project may be
-further defined and clarified by project maintainers.
+    <h1>تأكيد البريد الإلكتروني</h1>
+    <input type="email" id="email" placeholder="أدخل البريد الإلكتروني">
+    <br><br>
+    <button onclick="sendEmail()">تأكيد</button>
+    
+    <div id="input-code-section" class="hidden">
+        <br>
+        <input type="text" id="verification-code" placeholder="أدخل الأحرف">
+        <br><br>
+        <button onclick="verifyCode()">تحقق</button>
+    </div>
 
-## Enforcement
+    <div id="sms-message" class="message hidden"></div>
+    <div id="message" class="message hidden"></div>
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported by contacting the project team at report@palletsprojects.com. All
-complaints will be reviewed and investigated and will result in a response that
-is deemed necessary and appropriate to the circumstances. The project team is
-obligated to maintain confidentiality with regard to the reporter of an incident.
-Further details of specific enforcement policies may be posted separately.
+    <script>
+        let generatedCode = '';
 
-Project maintainers who do not follow or enforce the Code of Conduct in good
-faith may face temporary or permanent repercussions as determined by other
-members of the project's leadership.
+        function sendEmail() {
+            const email = document.getElementById('email').value;
+            if (email === '') {
+                alert('يرجى إدخال البريد الإلكتروني');
+                return;
+            }
 
-## Attribution
+            fetch('/send_code', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({
+                    email: email
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    generatedCode = data.code;
+                    const smsMessageDiv = document.getElementById('sms-message');
+                    smsMessageDiv.textContent = `تم إرسال الرمز: ${generatedCode} إلى البريد الإلكتروني: ${email}`;
+                    smsMessageDiv.classList.remove('hidden');
+                    document.getElementById('input-code-section').classList.remove('hidden');
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
 
-This Code of Conduct is adapted from the [Contributor Covenant][homepage], version 1.4,
-available at https://www.contributor-covenant.org/version/1/4/code-of-conduct.html
+        function verifyCode() {
+            const inputCode = document.getElementById('verification-code').value;
+            const messageDiv = document.getElementById('message');
+            if (inputCode === generatedCode) {
+                messageDiv.textContent = 'تم التحقق بنجاح!';
+                messageDiv.className = 'message blue-window';
+            } else {
+                messageDiv.textContent = 'الرمز غير صحيح، يرجى المحاولة مرة أخرى.';
+                messageDiv.className = 'message red-window';
+            }
+            messageDiv.classList.remove('hidden');
+        }
+    </script>
 
-[homepage]: https://www.contributor-covenant.org
+</body>
+</html>
 
-For answers to common questions about this code of conduct, see
-https://www.contributor-covenant.org/faq
+
+python app.py
+
+    
